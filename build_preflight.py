@@ -1,15 +1,17 @@
 import setuptools_scm
 import platform
 import codecs
+import re
 
 # Derive a version string from git
 athena_version = setuptools_scm.get_version()
 
-version_hunks = athena_version.split('.')
+match = re.match(r'^(\d+)\.(\d+)(?:\.(\d+))?', athena_version)
+if not match:
+    raise ValueError('Cannot derive Windows version from {}'.format(athena_version))
+version_hunks = [int(part or 0) for part in match.groups()]
  
 print(version_hunks)
-
-assert( hunk.isdigit() for hunk in version_hunks[0:2] )
 
 def writeAthenaVersionFile():
     template = '''
@@ -55,7 +57,7 @@ VSVersionInfo(
         u'040904E4',
         [StringStruct(u'CompanyName', u'MIT LCCB Lab'),
         StringStruct(u'FileDescription', u'Athena - a GUI Toolkit for DNA Design'),
-        StringStruct(u'FileVersion', u'0, 0, 5, 0'),
+        StringStruct(u'FileVersion', u'{0}.{1}.{2}.0'),
         StringStruct(u'InternalName', u'Athena'),
         StringStruct(u'LegalCopyright', u'Copyright 2019'),
         StringStruct(u'LegalTrademarks', u''),
@@ -66,7 +68,7 @@ VSVersionInfo(
     VarFileInfo([VarStruct(u'Translation', [1033, 1252])])
   ]
 )'''
-    content = windows_version_template.format(*(version_hunks[0:3]+[athena_version]))
+    content = windows_version_template.format(*(version_hunks+[athena_version]))
     filename = 'version_info.txt'
     with codecs.open(filename, 'w+', 'utf_8') as f:
         f.write(content)

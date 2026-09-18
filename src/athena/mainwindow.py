@@ -192,12 +192,15 @@ def parseLCBBToolOutput( output ):
     iter_out = iter(output.split('\n'))
     for line in iter_out:
         if line.strip().startswith('2.7.'):
-            line27a = next(iter_out)
-            line27b = next(iter_out)
-            result['edge_length'] = float( line27a.split(':')[1].strip() )
-            result['scale_factor'] = float( line27b.split(':')[1].strip() )
+            try:
+                line27a = next(iter_out)
+                line27b = next(iter_out)
+                result['edge_length'] = float( line27a.split(':')[1].strip() )
+                result['scale_factor'] = float( line27b.split(':')[1].strip() )
+            except (StopIteration, IndexError, ValueError):
+                result['error'] = 'Could not read the tool scale factor'
         if line.strip().startswith('+=== error'):
-            errline = next(iter_out).strip().strip('|').strip()
+            errline = next(iter_out, 'Unknown tool error').strip().strip('|').strip()
             print("found error", errline)
             result['error'] = errline
     return result
@@ -236,15 +239,23 @@ def runLCBBTool( toolname, p2_input_file, p1_output_dir=Path('athena_tmp_output'
     tool_call_strs = [str(x) for x in tool_call]
 
     print('Calling {} as follows'.format(tool), tool_call_strs)
-    result = subprocess.run(tool_call_strs, text=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+    try:
+        result = subprocess.run(tool_call_strs, text=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+    except OSError as exc:
+        result = subprocess.CompletedProcess(tool_call_strs, 1, str(exc))
     result.toolinfo= parseLCBBToolOutput( result.stdout )
     if 'error' in result.toolinfo:
         # Tool indicated error; override return code
         result.returncode = 257
     if result.returncode == 0:
         result.bildfiles = list( p1_output_dir.glob('*.bild') )
-        result.cndofile = next( p1_output_dir.glob('*.cndo') )
-        result.output_dir = p1_output_dir
+        result.cndofile = next( p1_output_dir.glob('*.cndo'), None )
+        if (result.cndofile is None or 'scale_factor' not in result.toolinfo or
+                not any(path.match('*target_geometry.bild') for path in result.bildfiles)):
+            result.returncode = 1
+            result.toolinfo['error'] = 'Tool output is incomplete'
+        else:
+            result.output_dir = p1_output_dir
     return result
 
 class AthenaWindow(QMainWindow):
@@ -535,7 +546,7 @@ class AthenaWindow(QMainWindow):
         self.updateStatus('Ready.', log=False)
 
     def newOutputs( self, toolresults ):
-        if toolresults is None or toolresults.bildfiles is None: return
+        if toolresults is None or toolresults.returncode != 0: return
         scale_factor = toolresults.toolinfo['scale_factor']
         self.geomView.clearDecorations()
         for path in toolresults.bildfiles:
@@ -569,6 +580,8 @@ class AthenaWindow(QMainWindow):
     def saveOutput( self ):
         if( self.toolresults ):
             container_dir = QFileDialog.getExistingDirectory(self, "Save Location" )
+            if not container_dir:
+                return
             new_output_dir = Path(container_dir) / self.toolresults.output_dir.name
             if( self.includePDBBox.isChecked()):
                 self.generatePDB()
@@ -591,13 +604,18 @@ class AthenaWindow(QMainWindow):
         return infile_path, outfile_dir_path
 
     def runTool( self ):
+        current_item = self.geometryList.currentItem()
+        if current_item is None or current_item.data(0, Qt.UserRole) is None:
+            self.updateStatus('Select a geometry file before running a tool.')
+            return
         tool_chooser = self.toolControls.currentWidget()
         if tool_chooser == self.tools_2D:
             toolkey = (0, self.toolBox_2D.currentIndex() )
         elif tool_chooser == self.tools_3D:
             toolkey = (1, self.toolBox_3D.currentIndex() )
         else:
-            print( "ERROR: No available tool" ) 
+            self.updateStatus('No available tool.')
+            return
 
         self.toolMap[ toolkey ](self)
 
@@ -682,5 +700,3 @@ class AthenaWindow(QMainWindow):
         #if hasattr(event, 'source'): print(event.source())
         #if hasattr(event, 'queries'): print(int(event.queries()))
         #return super().event(event)
-
-

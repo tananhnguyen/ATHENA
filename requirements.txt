@@ -1,7 +1,7 @@
-PySide2==5.12.3 # Do not upgrade to 5.13+ without resolving github issue #11
-setuptools_scm
-plyfile
-numpy>=1.16.2
-# A bleeding-edge pyinstaller is necessary to support PySide2 + QML
-git+git://github.com/pyinstaller/pyinstaller@e6c0f13#egg=pyinstaller
-
+# Qt 5.13+ breaks Athena screenshots; see lcbb/athena issue #11.
+# Windows wheels for PySide2 5.12.x require 64-bit Python 3.7.
+PySide2==5.12.6
+PyInstaller==5.13.2
+setuptools_scm==6.4.2
+plyfile==0.9
+numpy==1.21.6
