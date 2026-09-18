@@ -9,13 +9,13 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $repo
 
 if (-not (Test-Path '.venv-windows\Scripts\python.exe')) {
-    python -c 'import struct, sys; assert sys.version_info[:2] == (3, 7) and struct.calcsize("P") == 8, "64-bit Python 3.7 is required"'
+    python windows-build\build_checks.py python-version
     if ($LASTEXITCODE -ne 0) { throw '64-bit Python 3.7 is required on PATH.' }
     python -m venv .venv-windows
     if ($LASTEXITCODE -ne 0) { throw 'Python 3.7 x64 is required.' }
 }
 $python = Join-Path $repo '.venv-windows\Scripts\python.exe'
-& $python -c 'import struct, sys; assert sys.version_info[:2] == (3, 7) and struct.calcsize("P") == 8, "64-bit Python 3.7 is required"'
+& $python windows-build\build_checks.py python-version
 if ($LASTEXITCODE -ne 0) { throw 'The existing .venv-windows uses the wrong Python version.' }
 
 & $python -m pip install -r windows-build\requirements.txt
@@ -28,7 +28,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Athena dependencies could not be imported.' }
 & $python build_preflight.py
 if ($LASTEXITCODE -ne 0) { throw 'Version generation failed.' }
 
-$qtPlugins = (& $python -c 'import os, PySide2; print(os.path.join(os.path.dirname(PySide2.__file__), "plugins", "geometryloaders"))' | Select-Object -Last 1)
+$qtPlugins = (& $python windows-build\build_checks.py geometryloaders | Select-Object -Last 1)
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $qtPlugins)) {
     throw 'PySide2 geometry loader plugins were not found.'
 }
